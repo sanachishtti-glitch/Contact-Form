@@ -52,7 +52,7 @@ Place your screenshots in a folder named `screenshots/` in the project root. Use
   <tr>
     <td align="center"><img src="./screenshots/main-interface.png" alt="Sphere Form login and registration interface" width="280" height="190" style="object-fit: cover;" /></td>
     <td align="center"><img src="./screenshots/contact-form.png" alt="Sphere Form contact form" width="280" height="190" style="object-fit: cover;" /></td>
-    <td align="center"><img src="./screenshots/contact-otp.png" alt="Sphere Form OTP verification screen" width="280" height="190" style="object-fit: cover;" /></td>
+    <td align="center"><img src="./screenshots/image.png" alt="Sphere Form OTP verification screen" width="280" height="190" style="object-fit: cover;" /></td>
   </tr>
 </table>
 
