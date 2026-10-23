@@ -386,15 +386,36 @@ app.post("/api/contact/verify-otp", authenticateToken, otpLimiter, async (req, r
 });
 
 // Bug 1 Fix: Database Connection First, Then app.listen()
-mongoose
-  .connect(MONGO_URI)
-  .then(() => {
-    console.log("Connected to MongoDB successfully!");
-    app.listen(PORT, () => {
-      console.log(`Backend running on http://localhost:${PORT}`);
-    });
-  })
-  .catch((err) => {
+
+// MongoDB connection for Vercel serverless
+let mongoConnectionPromise = null;
+
+app.use(async (req, res, next) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      if (!mongoConnectionPromise) {
+        mongoConnectionPromise = mongoose
+          .connect(MONGO_URI, {
+            serverSelectionTimeoutMS: 10000,
+          })
+          .catch((err) => {
+            mongoConnectionPromise = null;
+            throw err;
+          });
+      }
+
+      await mongoConnectionPromise;
+    }
+
+    next();
+  } catch (err) {
     console.error("MongoDB Connection Error:", err.message);
-    process.exit(1); // Server start nahi hoga agar DB connect na ho
-  });
+
+    return res.status(503).json({
+      success: false,
+      message: "Database connection failed. Please try again.",
+    });
+  }
+});
+
+module.exports = app;
