@@ -10,6 +10,7 @@ const mongoose = require("mongoose");
 const rateLimit = require("express-rate-limit"); // Rate limiting ke liye
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const MONGO_URI = process.env.MONGO_URI;
@@ -29,6 +30,39 @@ app.use(
 );
 
 app.use(express.json({ limit: "20kb" }));
+// Bug 1 Fix: Database Connection First, Then app.listen()
+
+// MongoDB connection for Vercel serverless
+let mongoConnectionPromise = null;
+
+app.use(async (req, res, next) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      if (!mongoConnectionPromise) {
+        mongoConnectionPromise = mongoose
+          .connect(MONGO_URI, {
+            serverSelectionTimeoutMS: 10000,
+          })
+          .catch((err) => {
+            mongoConnectionPromise = null;
+            throw err;
+          });
+      }
+
+      await mongoConnectionPromise;
+    }
+
+    next();
+  } catch (err) {
+    console.error("MongoDB Connection Error:", err.message);
+
+    return res.status(503).json({
+      success: false,
+      message: "Database connection failed. Please try again.",
+    });
+  }
+});
+
 
 // Rate Limiters (Bug 4 Fix)
 const authLimiter = rateLimit({
@@ -385,37 +419,39 @@ app.post("/api/contact/verify-otp", authenticateToken, otpLimiter, async (req, r
   }
 });
 
-// Bug 1 Fix: Database Connection First, Then app.listen()
-
-// MongoDB connection for Vercel serverless
-let mongoConnectionPromise = null;
-
-app.use(async (req, res, next) => {
-  try {
-    if (mongoose.connection.readyState !== 1) {
-      if (!mongoConnectionPromise) {
-        mongoConnectionPromise = mongoose
-          .connect(MONGO_URI, {
-            serverSelectionTimeoutMS: 10000,
-          })
-          .catch((err) => {
-            mongoConnectionPromise = null;
-            throw err;
-          });
-      }
-
-      await mongoConnectionPromise;
-    }
-
-    next();
-  } catch (err) {
-    console.error("MongoDB Connection Error:", err.message);
-
-    return res.status(503).json({
-      success: false,
-      message: "Database connection failed. Please try again.",
-    });
-  }
-});
-
 module.exports = app;
+
+// // Bug 1 Fix: Database Connection First, Then app.listen()
+
+// // MongoDB connection for Vercel serverless
+// let mongoConnectionPromise = null;
+
+// app.use(async (req, res, next) => {
+//   try {
+//     if (mongoose.connection.readyState !== 1) {
+//       if (!mongoConnectionPromise) {
+//         mongoConnectionPromise = mongoose
+//           .connect(MONGO_URI, {
+//             serverSelectionTimeoutMS: 10000,
+//           })
+//           .catch((err) => {
+//             mongoConnectionPromise = null;
+//             throw err;
+//           });
+//       }
+
+//       await mongoConnectionPromise;
+//     }
+
+//     next();
+//   } catch (err) {
+//     console.error("MongoDB Connection Error:", err.message);
+
+//     return res.status(503).json({
+//       success: false,
+//       message: "Database connection failed. Please try again.",
+//     });
+//   }
+// });
+
+// module.exports = app;
