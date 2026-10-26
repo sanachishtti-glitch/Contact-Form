@@ -18,7 +18,7 @@ const RECEIVER_EMAIL = process.env.RECEIVER_EMAIL;
 
 // 1. Essential Environment Variables Validation (RECEIVER_EMAIL included)
 if (!JWT_SECRET || !MONGO_URI || !process.env.EMAIL_USER || !process.env.EMAIL_APP_PASSWORD || !RECEIVER_EMAIL) {
-  console.error("CRITICAL ERROR: Zaroori environment variables (.env file mein) missing hain!");
+  console.error("CRITICAL ERROR: Required environment variables are missing from the .env file!");
   process.exit(1);
 }
 
@@ -68,7 +68,7 @@ app.use(async (req, res, next) => {
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // Max 10 requests per window
-  message: { success: false, message: "Bohot zyada requests hain, thori der baad koshish karein." },
+  message: { success: false, message: "Too many requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -76,7 +76,7 @@ const authLimiter = rateLimit({
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5, // Max 5 OTP requests per window
-  message: { success: false, message: "Bohot zyada OTP requests hain, 15 minute baad try karein." },
+  message: { success: false, message: "Too many OTP requests. Please try again after 15 minutes." },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -173,19 +173,19 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) {
-      return res.status(400).json({ success: false, message: "Email aur password zaroori hain." });
+      return res.status(400).json({ success: false, message: "Email and password are required." });
     }
 
     const cleanEmail = normalizeEmail(email);
 
     // Email format validation
     if (!isValidEmailFormat(cleanEmail)) {
-      return res.status(400).json({ success: false, message: "Ghalat email format hai." });
+      return res.status(400).json({ success: false, message: "Invalid email format." });
     }
 
     // Password length validation
     if (String(password).length < 6) {
-      return res.status(400).json({ success: false, message: "Password kam az kam 6 characters ka hona chahiye." });
+      return res.status(400).json({ success: false, message: "Password must be at least 6 characters long." });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -193,14 +193,14 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
 
     await User.create({ email: cleanEmail, passwordHash });
 
-    return res.json({ success: true, message: "Account successfully ban gaya! Ab login karein." });
+    return res.json({ success: true, message: "Account created successfully! Please log in now." });
   } catch (error) {
     // Duplicate email handling (MongoDB E11000 Error - Bug 7 Fix)
     if (error.code === 11000) {
-      return res.status(400).json({ success: false, message: "Yeh email pehle se registered hai." });
+      return res.status(400).json({ success: false, message: "This email is already registered." });
     }
     console.error("Signup error:", error.message);
-    return res.status(500).json({ success: false, message: "Signup fail ho gaya." });
+    return res.status(500).json({ success: false, message: "Signup failed" });
   }
 });
 
@@ -209,19 +209,19 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) {
-      return res.status(400).json({ success: false, message: "Email aur password zaroori hain." });
+      return res.status(400).json({ success: false, message: "Email and password are required." });
     }
 
     const cleanEmail = normalizeEmail(email);
     const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
-      return res.status(400).json({ success: false, message: "Invalid email ya password." });
+      return res.status(400).json({ success: false, message: "Invalid email or password." });
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
-      return res.status(400).json({ success: false, message: "Invalid email ya password." });
+      return res.status(400).json({ success: false, message: "Invalid email or password." });
     }
 
     const token = jwt.sign(
@@ -237,7 +237,7 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     });
   } catch (error) {
     console.error("Login error:", error.message);
-    return res.status(500).json({ success: false, message: "Login fail ho gaya." });
+    return res.status(500).json({ success: false, message: "Login failed." });
   }
 });
 
@@ -248,12 +248,12 @@ app.post("/api/contact/send-otp", authenticateToken, otpLimiter, async (req, res
     const cleanEmail = normalizeEmail(email);
 
     if (!name || !cleanEmail || !message) {
-      return res.status(400).json({ success: false, message: "Sari required fields bharein." });
+      return res.status(400).json({ success: false, message: "Please fill in all required fields." });
     }
 
     // Email format validation
     if (!isValidEmailFormat(cleanEmail)) {
-      return res.status(400).json({ success: false, message: "Ghalat email format hai." });
+      return res.status(400).json({ success: false, message: "Invalid email format." });
     }
 
     // MX Domain check
@@ -261,7 +261,7 @@ app.post("/api/contact/send-otp", authenticateToken, otpLimiter, async (req, res
     try {
       const mxRecords = await dns.resolveMx(domain);
       if (!mxRecords || mxRecords.length === 0) {
-        return res.status(400).json({ success: false, message: "Email domain exist nahi karta." });
+        return res.status(400).json({ success: false, message: "The email domain does not exist." });
       }
     } catch {
       return res.status(400).json({ success: false, message: "Invalid email domain." });
@@ -310,7 +310,7 @@ if (existingRecord) {
   if (!reservedRecord) {
     return res.status(429).json({
       success: false,
-      message: "Please 60 seconds wait karein.",
+      message: "Please wait 60 seconds before trying again.",
     });
   }
 } else {
@@ -324,47 +324,54 @@ if (existingRecord) {
     if (error.code === 11000) {
       return res.status(429).json({
         success: false,
-        message: "OTP request process ho rahi hai. Dobara try karein.",
+        message: "Your OTP request is being processed. Please try again.",
       });
     }
     throw error;
   }
 }
 
-// Send OTP only after reserving the database record.
-try {
-  await transporter.sendMail({
-    from: `"Verification" <${process.env.EMAIL_USER}>`,
-    to: cleanEmail,
-    subject: "Your Email Verification Code",
-    text: `Your OTP is ${otp}. Valid for 5 minutes.`,
-  });
-} catch (mailError) {
-  console.error("Nodemailer sendMail Error:", mailError.message);
+    // Send OTP only after reserving the database record.
+    try {
+      await transporter.sendMail({
+        from: `"Sphere Form Team" <${process.env.EMAIL_USER}>`,
+        to: cleanEmail,
+        subject: "Your Contact Form Verification Code",
+        text: `Hello,
 
-  // Remove only the OTP reservation made by this request.
-  await OtpRecord.deleteOne({
-    _id: reservedRecord._id,
-    otpHash,
-  }).catch((cleanupError) => {
-    console.error("OTP cleanup error:", cleanupError.message);
-  });
+Your verification code for Contact Form is: ${otp}
 
-  return res.status(500).json({
-    success: false,
-    message: "Email send nahi ho saki. Dobara try karein.",
-  });
-}
+This code expires in 5 minutes. If you did not request this code, please ignore this email.
 
-return res.json({
-  success: true,
-  message: "OTP aapki email par bhej diya gaya hai.",
-});
+Regards,
+Contact Form Team`,
+      });
+    } catch (mailError) {
+      console.error("Nodemailer sendMail Error:", mailError.message);
+
+      // Remove only the OTP reservation made by this request.
+      await OtpRecord.deleteOne({
+        _id: reservedRecord._id,
+        otpHash,
+      }).catch((cleanupError) => {
+        console.error("OTP cleanup error:", cleanupError.message);
+      });
+
+      return res.status(500).json({
+        success: false,
+        message: "The email could not be sent. Please try again.",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "The OTP has been sent to your email.",
+    });
 
 
   } catch (error) {
     console.error("OTP send error:", error.message);
-    return res.status(500).json({ success: false, message: "OTP send nahi ho saka." });
+    return res.status(500).json({ success: false, message: "Unable to send OTP." });
   }
 });
 
@@ -386,13 +393,13 @@ app.post("/api/contact/verify-otp", authenticateToken, otpLimiter, async (req, r
 
     if (record.attempts >= MAX_ATTEMPTS) {
       await OtpRecord.deleteOne({ email });
-      return res.status(429).json({ success: false, message: "Bohot zyada wrong attempts. Naya OTP request karein." });
+      return res.status(429).json({ success: false, message: "Too many incorrect attempts. Please request a new OTP." });
     }
 
     if (hashOtp(otp) !== record.otpHash) {
       record.attempts += 1;
       await record.save();
-      return res.status(400).json({ success: false, message: "Incorrect OTP. Dubara try karein." });
+      return res.status(400).json({ success: false, message: "Incorrect OTP. Please try again." });
     }
 
     const { name, subject, message } = record.form;
@@ -407,15 +414,15 @@ app.post("/api/contact/verify-otp", authenticateToken, otpLimiter, async (req, r
       });
     } catch (mailError) {
       console.error("Contact Email Dispatch Error:", mailError.message);
-      return res.status(500).json({ success: false, message: "Receiver ko message deliver nahi ho saka." });
+      return res.status(500).json({ success: false, message: "The message could not be delivered to the recipient." });
     }
 
     await OtpRecord.deleteOne({ email });
 
-    return res.json({ success: true, message: "Message successfully send ho gaya!" });
+    return res.json({ success: true, message: "Message sent successfully!" });
   } catch (error) {
     console.error("OTP verification error:", error.message);
-    return res.status(500).json({ success: false, message: "Message send karne mein masla hua." });
+    return res.status(500).json({ success: false, message: "There was a problem sending the message." });
   }
 });
 
